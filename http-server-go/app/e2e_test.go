@@ -1,8 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"io"
+	"log"
 	"net"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -32,21 +34,52 @@ func TestMain(m *testing.M) {
 }
 
 func TestServerResponse(t *testing.T) {
-	// Connect to the server
-	conn, err := net.Dial("tcp", "localhost:4221")
+	resp, err := http.Get("http://localhost:4221")
 	if err != nil {
-		t.Fatalf("Failed to connect to server: %v", err)
+		log.Fatalf("Failed to send request: %v", err)
 	}
-	defer conn.Close()
+	defer resp.Body.Close()
 
-	request := "GET / HTTP/1.1\r\n\r\n"
-	conn.Write([]byte(request))
+	// Read and process the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Failed to read response body: %v", err)
+	}
+	log.Printf("Response: %s", body)
 
-	reader := bufio.NewReader(conn)
-	responseLine, _ := reader.ReadString('\n')
+	if resp.Status != "200 OK" {
+		t.Errorf("Expected %q, got %q", "200 OK", resp.Status)
+	}
+}
 
-	expectedStatus := "HTTP/1.1 200 OK\r\n"
-	if responseLine != expectedStatus {
-		t.Errorf("Expected %q, got %q", expectedStatus, responseLine)
+func TestServerResponseWithBody(t *testing.T) {
+	resp, err := http.Get("http://localhost:4221/echo/abc")
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read and process the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Failed to read response body: %v", err)
+	}
+	log.Printf("Response: %s", body)
+
+	expectedBody := "abc"
+	if string(body) != expectedBody {
+		t.Errorf("Expected body = %q, got %q", expectedBody, string(body))
+	}
+
+	hContentType := resp.Header.Get("Content-Type")
+	expectedContentType := "text/plain"
+	if hContentType != expectedContentType {
+		t.Errorf("Expected Header.Content-Type = %q, got %q", expectedContentType, hContentType)
+	}
+
+	hContentLength := resp.Header.Get("Content-Length")
+	expectedContentLength := "3"
+	if hContentLength != expectedContentLength {
+		t.Errorf("Expected Header.Content-Length = %q, got %q", expectedContentLength, hContentLength)
 	}
 }

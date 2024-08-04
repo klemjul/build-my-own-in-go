@@ -13,24 +13,17 @@ type HttpRequest struct {
 	body     []byte
 }
 
-type HttpResponse struct {
-	status     int
-	statusText string
-	body       []byte
-	headers    map[string]string
-}
-
 func handleRequest(req HttpRequest) HttpResponse {
 	pathParts := strings.Split(req.path, "/")
-	if pathParts[0] == "echo" {
+	if pathParts[1] == "echo" {
 		return HttpResponse{
 			status:     200,
 			statusText: "OK",
-			body:       req.body,
-			headers:    map[string]string{"Content-Type": "text/plain", "Content-Length": strconv.Itoa(len(req.body))},
+			body:       []byte(pathParts[2]),
+			headers:    map[string]string{"Content-Type": "text/plain", "Content-Length": strconv.Itoa(len(pathParts[2]))},
 		}
 	}
-	if pathParts[0] == "" {
+	if pathParts[1] == "" {
 		return HttpResponse{
 			status:     200,
 			statusText: "OK",

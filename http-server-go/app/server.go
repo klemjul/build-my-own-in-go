@@ -93,8 +93,7 @@ func handleConnection(conn net.Conn) {
 	}
 	log.Println(request)
 	response := handleRequest(request)
-	responseText := fmt.Sprintf("HTTP/1.1 %s %s\r\n\r\n", strconv.Itoa(response.status), response.statusText)
-	log.Println(responseText)
+	responseText := buildResponseText((response))
 
 	// Send a basic HTTP response
 	_, err = conn.Write([]byte(responseText))
