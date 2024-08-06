@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strconv"
 	"strings"
 )
@@ -29,6 +30,23 @@ func handleRequest(req HttpRequest) HttpResponse {
 			statusText: "OK",
 			body:       []byte(req.headers["User-Agent"]),
 			headers:    map[string]string{"Content-Type": "text/plain", "Content-Length": strconv.Itoa(len(req.headers["User-Agent"]))},
+		}
+	}
+	if pathParts[1] == "files" {
+		file, err := os.ReadFile("../../" + pathParts[2])
+		if err != nil || file == nil {
+			return HttpResponse{
+				status:     404,
+				statusText: "Not Found",
+				body:       make([]byte, 0),
+				headers:    make(map[string]string),
+			}
+		}
+		return HttpResponse{
+			status:     200,
+			statusText: "OK",
+			body:       file,
+			headers:    map[string]string{"Content-Type": "application/octet-stream", "Content-Length": strconv.Itoa(len(file))},
 		}
 	}
 	if pathParts[1] == "" {

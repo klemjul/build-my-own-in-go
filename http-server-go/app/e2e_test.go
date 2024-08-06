@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestServerResponse(t *testing.T) {
+func TestResponse(t *testing.T) {
 	resp, err := http.Get(baseUrl)
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
@@ -48,7 +48,7 @@ func TestServerResponse(t *testing.T) {
 	}
 }
 
-func TestServerResponseWithBody(t *testing.T) {
+func TestResponseWithBody(t *testing.T) {
 	resp, err := http.Get(baseUrl + "/echo/abc")
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
@@ -80,7 +80,7 @@ func TestServerResponseWithBody(t *testing.T) {
 	}
 }
 
-func TestServerRequestHeader(t *testing.T) {
+func TestReadHeader(t *testing.T) {
 	customUserAgent := "MyCustomUserAgent/1.0"
 	req, _ := http.NewRequest("GET", baseUrl+"/user-agent", nil)
 	req.Header.Set("User-Agent", customUserAgent)
@@ -130,4 +130,46 @@ func TestConcurrentConnection(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestFileFound(t *testing.T) {
+	resp, err := http.Get(baseUrl + "/files/README.md")
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	expectedFile, _ := os.ReadFile("../../README.md")
+	if err != nil {
+		log.Fatalf("Failed to READ FILE: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+
+	hContentType := resp.Header.Get("Content-Type")
+	expectedContentType := "application/octet-stream"
+	if hContentType != expectedContentType {
+		t.Errorf("Expected Header.Content-Type = %q, got %q", expectedContentType, hContentType)
+	}
+
+	hContentLength := resp.Header.Get("Content-Length")
+	expectedContentLength := strconv.Itoa((len(expectedFile)))
+	if hContentLength != expectedContentLength {
+		t.Errorf("Expected Header.Content-Length = %q, got %q", expectedContentLength, hContentLength)
+	}
+
+	if string(body) != string(expectedFile) {
+		t.Errorf("Expected body = %q, got %q", string(expectedFile), string(body))
+	}
+}
+
+func TestFileNotFound(t *testing.T) {
+	resp, err := http.Get(baseUrl + "/files/non_existant_file")
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.Status != "404 Not Found" {
+		t.Errorf("Expected %q, got %q", "404 Not Found", resp.Status)
+	}
 }
