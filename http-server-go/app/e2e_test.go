@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
 
 // Global variable to hold the server listener
 var listener net.Listener
+var baseUrl = "http://localhost:4221"
 
 // TestMain sets up the server before tests and tears it down afterward
 func TestMain(m *testing.M) {
@@ -35,18 +37,11 @@ func TestMain(m *testing.M) {
 }
 
 func TestServerResponse(t *testing.T) {
-	resp, err := http.Get("http://localhost:4221")
+	resp, err := http.Get(baseUrl)
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
-
-	// Read and process the response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
-	}
-	log.Printf("Response: %s", body)
 
 	if resp.Status != "200 OK" {
 		t.Errorf("Expected %q, got %q", "200 OK", resp.Status)
@@ -54,7 +49,7 @@ func TestServerResponse(t *testing.T) {
 }
 
 func TestServerResponseWithBody(t *testing.T) {
-	resp, err := http.Get("http://localhost:4221/echo/abc")
+	resp, err := http.Get(baseUrl + "/echo/abc")
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
 	}
@@ -87,7 +82,7 @@ func TestServerResponseWithBody(t *testing.T) {
 
 func TestServerRequestHeader(t *testing.T) {
 	customUserAgent := "MyCustomUserAgent/1.0"
-	req, _ := http.NewRequest("GET", "http://localhost:4221/user-agent", nil)
+	req, _ := http.NewRequest("GET", baseUrl+"/user-agent", nil)
 	req.Header.Set("User-Agent", customUserAgent)
 	client := &http.Client{}
 
@@ -114,4 +109,25 @@ func TestServerRequestHeader(t *testing.T) {
 	if hContentLength != expectedContentLength {
 		t.Errorf("Expected Header.Content-Length = %q, got %q", expectedContentLength, hContentLength)
 	}
+}
+
+func TestConcurrentConnection(t *testing.T) {
+	var wg sync.WaitGroup
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := http.Get(baseUrl)
+			if err != nil {
+				log.Fatalf("Failed to send request: %v", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.Status != "200 OK" {
+				t.Errorf("Expected %q, got %q", "200 OK", resp.Status)
+			}
+		}()
+	}
+	wg.Wait()
 }
