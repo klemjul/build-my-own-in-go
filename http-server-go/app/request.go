@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -33,6 +34,24 @@ func handleRequest(req HttpRequest) HttpResponse {
 		}
 	}
 	if pathParts[1] == "files" {
+		if req.method == "POST" {
+			_, err := os.Create(os.TempDir() + "/" + pathParts[2])
+			if err != nil {
+				log.Panic(err)
+				return HttpResponse{
+					status:     500,
+					statusText: "Internal Server Error",
+					body:       make([]byte, 0),
+					headers:    make(map[string]string),
+				}
+			}
+			return HttpResponse{
+				status:     201,
+				statusText: "Created",
+				body:       make([]byte, 0),
+				headers:    make(map[string]string),
+			}
+		}
 		file, err := os.ReadFile((os.TempDir() + "/" + pathParts[2]))
 		if err != nil || file == nil {
 			return HttpResponse{
