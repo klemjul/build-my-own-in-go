@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"log"
 	"net"
@@ -178,5 +179,27 @@ func TestFileNotFound(t *testing.T) {
 
 	if resp.Status != "404 Not Found" {
 		t.Errorf("Expected %q, got %q", "404 Not Found", resp.Status)
+	}
+}
+
+func TestCreateFile(t *testing.T) {
+	defer os.Remove(os.TempDir() + "/" + "file_123")
+	resp, err := http.Post(baseUrl+"/files/file_123", "application/octet-stream", bytes.NewBuffer(([]byte("file 123 content"))))
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.Status != "201 Created" {
+		t.Errorf("Expected %q, got %q", "201 Created", resp.Status)
+	}
+
+	file, err := os.ReadFile(os.TempDir() + "/" + "file_123")
+	if err != nil {
+		panic(err)
+	}
+	if string(body) != string(file) {
+		t.Errorf("Expected body = %q, got %q", string(body), string(file))
 	}
 }
