@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
@@ -133,18 +134,24 @@ func TestConcurrentConnection(t *testing.T) {
 }
 
 func TestFileFound(t *testing.T) {
-	resp, err := http.Get(baseUrl + "/files/README.md")
+	tempFile, err := os.CreateTemp("", "TestFileFound-*")
+	if err != nil {
+		log.Fatalf("Failed to Create Temp File: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+	_, _ = tempFile.WriteString("This is some example content.")
+	tempFile.Sync()
+
+	tempFile.Seek(0, io.SeekStart) // Go back to the start of the file
+	expectedFile, _ := io.ReadAll(tempFile)
+
+	resp, err := http.Get(baseUrl + "/files/" + filepath.Base((tempFile.Name())))
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	expectedFile, _ := os.ReadFile("../../README.md")
-	if err != nil {
-		log.Fatalf("Failed to READ FILE: %v", err)
-	}
 	body, _ := io.ReadAll(resp.Body)
-
 	hContentType := resp.Header.Get("Content-Type")
 	expectedContentType := "application/octet-stream"
 	if hContentType != expectedContentType {

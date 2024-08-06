@@ -33,7 +33,7 @@ func handleRequest(req HttpRequest) HttpResponse {
 		}
 	}
 	if pathParts[1] == "files" {
-		file, err := os.ReadFile("../../" + pathParts[2])
+		file, err := os.ReadFile((os.TempDir() + "/" + pathParts[2]))
 		if err != nil || file == nil {
 			return HttpResponse{
 				status:     404,
