@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -79,6 +80,37 @@ func TestServerResponseWithBody(t *testing.T) {
 
 	hContentLength := resp.Header.Get("Content-Length")
 	expectedContentLength := "3"
+	if hContentLength != expectedContentLength {
+		t.Errorf("Expected Header.Content-Length = %q, got %q", expectedContentLength, hContentLength)
+	}
+}
+
+func TestServerRequestHeader(t *testing.T) {
+	customUserAgent := "MyCustomUserAgent/1.0"
+	req, _ := http.NewRequest("GET", "http://localhost:4221/user-agent", nil)
+	req.Header.Set("User-Agent", customUserAgent)
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("Failed to perform request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if string(body) != customUserAgent {
+		t.Errorf("Expected body = %q, got %q", customUserAgent, string(body))
+	}
+
+	hContentType := resp.Header.Get("Content-Type")
+	expectedContentType := "text/plain"
+	if hContentType != expectedContentType {
+		t.Errorf("Expected Header.Content-Type = %q, got %q", expectedContentType, hContentType)
+	}
+
+	hContentLength := resp.Header.Get("Content-Length")
+	expectedContentLength := strconv.Itoa((len(customUserAgent)))
 	if hContentLength != expectedContentLength {
 		t.Errorf("Expected Header.Content-Length = %q, got %q", expectedContentLength, hContentLength)
 	}

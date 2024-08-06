@@ -23,6 +23,14 @@ func handleRequest(req HttpRequest) HttpResponse {
 			headers:    map[string]string{"Content-Type": "text/plain", "Content-Length": strconv.Itoa(len(pathParts[2]))},
 		}
 	}
+	if pathParts[1] == "user-agent" {
+		return HttpResponse{
+			status:     200,
+			statusText: "OK",
+			body:       []byte(req.headers["User-Agent"]),
+			headers:    map[string]string{"Content-Type": "text/plain", "Content-Length": strconv.Itoa(len(req.headers["User-Agent"]))},
+		}
+	}
 	if pathParts[1] == "" {
 		return HttpResponse{
 			status:     200,
