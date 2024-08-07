@@ -27,3 +27,4 @@ jobs:
       - name: Run tests
         run: |
           make http-server-test
+          make git-go-test

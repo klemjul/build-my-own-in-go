@@ -3,6 +3,6 @@
 Learn go by recreating different technologies from scratch
 
 - [x] HTTP Server
-- [ ] Git
+- [ ] Git (WIP)
 - [ ] Database
 - [ ] Interpreter
