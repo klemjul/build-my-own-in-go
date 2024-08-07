@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"log"
 	"os"
 	"strconv"
@@ -18,6 +20,18 @@ type HttpRequest struct {
 func handleRequest(req HttpRequest) HttpResponse {
 	pathParts := strings.Split(req.path, "/")
 	if pathParts[1] == "echo" {
+		if req.headers["Accept-Encoding"] == "gzip" {
+			var compressedData bytes.Buffer
+			writer := gzip.NewWriter(&compressedData)
+			writer.Write([]byte(pathParts[2]))
+			writer.Close()
+			return HttpResponse{
+				status:     200,
+				statusText: "OK",
+				body:       compressedData.Bytes(),
+				headers:    map[string]string{"Content-Type": "text/plain", "Content-Encoding": "gzip", "Content-Length": strconv.Itoa(len(compressedData.String()))},
+			}
+		}
 		return HttpResponse{
 			status:     200,
 			statusText: "OK",

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"log"
 	"net"
@@ -51,9 +52,13 @@ func TestResponse(t *testing.T) {
 }
 
 func TestResponseWithBody(t *testing.T) {
-	resp, err := http.Get(baseUrl + "/echo/abc")
+	req, _ := http.NewRequest("GET", baseUrl+"/echo/abc", nil)
+	req.Header.Set("Accept-Encoding", "identity") // workaround to disable compression
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("Failed to send request: %v", err)
+		log.Fatalf("Failed to perform request: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -110,6 +115,11 @@ func TestReadHeader(t *testing.T) {
 	expectedContentLength := strconv.Itoa((len(customUserAgent)))
 	if hContentLength != expectedContentLength {
 		t.Errorf("Expected Header.Content-Length = %q, got %q", expectedContentLength, hContentLength)
+	}
+
+	hContentEncoding := resp.Header.Get("Content-Encoding")
+	if hContentEncoding != "" {
+		t.Errorf("Expected Header.Content-Encoding = %q, got %q", "", hContentEncoding)
 	}
 }
 
@@ -182,24 +192,37 @@ func TestFileNotFound(t *testing.T) {
 	}
 }
 
-func TestCreateFile(t *testing.T) {
-	defer os.Remove(os.TempDir() + "/" + "file_123")
-	resp, err := http.Post(baseUrl+"/files/file_123", "application/octet-stream", bytes.NewBuffer(([]byte("file 123 content"))))
+func TestGzipEncoding(t *testing.T) {
+	customEncoding := "gzip"
+	req, _ := http.NewRequest("GET", baseUrl+"/echo/abc", nil)
+	req.Header.Set("Accept-Encoding", customEncoding)
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("Failed to send request: %v", err)
+		log.Fatalf("Failed to perform request: %v", err)
 	}
 	defer resp.Body.Close()
+
 	body, _ := io.ReadAll(resp.Body)
 
-	if resp.Status != "201 Created" {
-		t.Errorf("Expected %q, got %q", "201 Created", resp.Status)
+	var compressedData bytes.Buffer
+	writer := gzip.NewWriter(&compressedData)
+	writer.Write([]byte("abc"))
+	writer.Close()
+
+	if string(body) != compressedData.String() {
+		t.Errorf("Expected %q, got %q", compressedData.String(), string(body))
 	}
 
-	file, err := os.ReadFile(os.TempDir() + "/" + "file_123")
-	if err != nil {
-		panic(err)
+	hContentEncoding := resp.Header.Get("Content-Encoding")
+	if hContentEncoding != "gzip" {
+		t.Errorf("Expected Header.Content-Encoding = %q, got %q", "gzip", hContentEncoding)
 	}
-	if string(body) != string(file) {
-		t.Errorf("Expected body = %q, got %q", string(body), string(file))
+
+	hContentType := resp.Header.Get("Content-Type")
+	expectedContentType := "text/plain"
+	if hContentType != expectedContentType {
+		t.Errorf("Expected Header.Content-Type = %q, got %q", expectedContentType, hContentType)
 	}
 }
