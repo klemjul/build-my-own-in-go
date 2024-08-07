@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
-	"io"
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,7 +14,7 @@ import (
 
 func SetupTestDir() string {
 	dirName := os.TempDir() + "/" + uuid.New().String()
-	err := os.Mkdir(dirName, os.ModeTemporary)
+	err := os.Mkdir(dirName, 0777)
 	if err != nil {
 		panic(err)
 	}
@@ -26,36 +28,69 @@ func CleanTestDir(dirName string) {
 	}
 }
 
-func RunGitCli(args []string) string {
-	// Redirect os.Stdout to a pipe
-	originalStdout := os.Stdout
-	readStdout, writeStdout, err := os.Pipe()
+func RunGitCli(dirName string, args ...string) (string, string, int) {
+	// Define the command to be executed
+	binDirAbs, _ := filepath.Abs("../../bin/git-go/app")
+
+	cmd := exec.Command(binDirAbs, args...)
+	cmd.Dir = dirName
+
+	// Create buffers to capture stdout and stderr
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	// Run the command
+	err := cmd.Run()
+
+	var exitCode = 0
+	// Check for errors, including non-zero exit status
 	if err != nil {
-		panic(err)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			fmt.Println(err)
+			exitCode = 999
+		}
 	}
-	os.Stdout = writeStdout
-
-	// Update os.Args
-	originalArgs := os.Args
-	os.Args = args
-
-	main()
-
-	// Restore original Stdout and Args
-	os.Stdout = originalStdout
-	os.Args = originalArgs
-
-	// Write and return Stdout pipe
-	writeStdout.Close()
-	var buf bytes.Buffer
-	io.Copy(&buf, readStdout)
-	return buf.String()
+	return stdoutBuf.String(), stderrBuf.String(), exitCode
 }
 
-func TestCli(t *testing.T) {
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return err == nil
+}
+
+func TestGitInit(t *testing.T) {
 	dirName := SetupTestDir()
 	defer CleanTestDir(dirName)
 
-	stdout := RunGitCli([]string{"./git-go", "arg1", "arg2"})
-	assert.Equal(t, stdout, "[./git-go arg1 arg2]\n", "they should be equal")
+	gitFolderName := dirName + "/.git"
+	gitObjectName := dirName + "/.git/objects"
+	gitRefsName := dirName + "/.git/refs"
+	gitHeadName := dirName + "/.git/HEAD"
+
+	RunGitCli(dirName, "init")
+
+	assert.True(t, fileExists(gitFolderName), gitFolderName+" should exist")
+	assert.True(t, fileExists(gitObjectName), gitObjectName+" should exist")
+	assert.True(t, fileExists(gitRefsName), gitRefsName+" should exist")
+	assert.True(t, fileExists(gitHeadName), gitHeadName+" should exist")
+
+	file, _ := os.ReadFile(gitHeadName)
+	assert.Equal(t, "ref: refs/heads/main\n", string(file))
+}
+
+func TestUnknownCommand(t *testing.T) {
+	dirName := SetupTestDir()
+	defer CleanTestDir(dirName)
+
+	_, stderr, exitCode := RunGitCli(dirName, "unknown")
+
+	assert.Equal(t, 1, exitCode)
+	assert.Equal(t, "Unknown command", stderr)
+
 }

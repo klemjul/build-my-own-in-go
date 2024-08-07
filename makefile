@@ -19,5 +19,5 @@ git-go-build:
 git-go-run: git-go-build
 	./$(BUILD_DIR)/$(GIT_CLI_BINARY)
 
-git-go-test: 
+git-go-test: git-go-build
 	cd $(GIT_CLI_BINARY)/ && ${GO} test  *.go
