@@ -1,7 +1,12 @@
 package main
 
-import "log"
+import (
+	"fmt"
+	"os"
+)
 
 func main() {
-	log.Println("Hello git cli !")
+	argsWithProg := os.Args
+	// argsWithoutProg := os.Args[1:]
+	fmt.Println(argsWithProg)
 }
