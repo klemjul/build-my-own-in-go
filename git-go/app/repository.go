@@ -72,8 +72,11 @@ func (r *Repository) HashFile(filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %v, %v", filename, err)
 	}
+
+	fileContent := "blob\x20" + strconv.Itoa(len(string(file))) + "\x00" + string(file)
+
 	hasher := sha1.New()
-	_, err = hasher.Write(file)
+	_, err = hasher.Write([]byte(fileContent))
 	if err != nil {
 		return "", fmt.Errorf("failed to write to sha1 hasher, %v", err)
 	}
@@ -81,7 +84,6 @@ func (r *Repository) HashFile(filename string) (string, error) {
 
 	var compressedData bytes.Buffer
 	writer := zlib.NewWriter(&compressedData)
-	fileContent := "blob\x20" + strconv.Itoa(len(string(file))) + "\x00" + string(file)
 	_, err = writer.Write([]byte(fileContent))
 	if err != nil {
 		return "", fmt.Errorf("failed to write to zlib writer, %v", err)

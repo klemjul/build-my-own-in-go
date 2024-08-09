@@ -107,11 +107,12 @@ func TestCatFile(t *testing.T) {
 	hasher := sha1.New()
 	initialFile := "Hello world !"
 	hasher.Write([]byte(initialFile))
-	hash := hex.EncodeToString(hasher.Sum(nil))
 
 	var compressedData bytes.Buffer
 	writer := zlib.NewWriter(&compressedData)
 	fileContent := "blob\x20" + strconv.Itoa(len(initialFile)) + "\x00" + initialFile
+	hash := hex.EncodeToString([]byte(fileContent))
+
 	writer.Write([]byte(fileContent))
 	writer.Close()
 	hashDir := dirName + "/.git/objects/" + hash[:2]
@@ -135,9 +136,12 @@ func TestHashObject(t *testing.T) {
 	fileName := dirName + "/" + "hellofile.txt"
 	fileContent := "Hello world !"
 	os.WriteFile(fileName, []byte(fileContent), 0755)
+	fileWithHeaders := "blob\x20" + strconv.Itoa(len(fileContent)) + "\x00" + fileContent
+
 	hasher := sha1.New()
-	hasher.Write([]byte(fileContent))
+	hasher.Write([]byte(fileWithHeaders))
 	hash := hex.EncodeToString(hasher.Sum(nil))
+
 	stdout, stderr, errcode := RunGitCli(dirName, "hash-object", "-w", fileName)
 	if errcode != 0 {
 		fmt.Println(stderr)
