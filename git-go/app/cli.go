@@ -1,38 +1,51 @@
 package main
 
 import (
+	"errors"
+	"flag"
+	"fmt"
 	"os"
 )
 
 func handleError(err error) {
 	if err != nil {
-		os.Stderr.WriteString(err.Error())
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-func initCommand() {
-	wd, err := os.Getwd()
-	handleError(err)
-	err = os.Mkdir(wd+"/.git", 0755)
-	handleError(err)
-	err = os.Mkdir(wd+"/.git/objects", 0755)
-	handleError(err)
-	err = os.Mkdir(wd+"/.git/refs", 0755)
-	handleError(err)
-	err = os.WriteFile(wd+"/.git/HEAD", []byte("ref: refs/heads/main\n"), 0755)
-	handleError(err)
 }
 
 func main() {
 	command := os.Args[1]
 
+	wd, err := os.Getwd()
+	handleError(err)
+	repo := Repository{
+		RootName: wd + "/.git",
+	}
+
 	switch command {
 	case "init":
-		initCommand()
+		err = repo.Init()
+		if err != nil {
+			handleError(err)
+		}
+	case "cat-file":
+		flagSet := flag.NewFlagSet(command, flag.ExitOnError)
+		var catFileP string
+		flagSet.StringVar(&catFileP, "p", "", "sha1 object hash")
+		flagSet.Parse(os.Args[2:])
+		if catFileP == "" {
+			handleError(errors.New("please provide -p flag with object hash"))
+		}
+		file, err := repo.CatFile(catFileP)
+		if err != nil {
+			handleError(err)
+		}
+		os.Stdout.WriteString(file)
 	default:
-		os.Stderr.WriteString("Unknown command")
-		os.Exit(1)
+		handleError(errors.New("Unknown command"))
 	}
+
+	os.Exit(0)
 
 }
