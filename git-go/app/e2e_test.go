@@ -118,7 +118,32 @@ func TestCatFile(t *testing.T) {
 	os.Mkdir(hashDir, 0755)
 	os.WriteFile(hashDir+"/"+hash[2:], compressedData.Bytes(), 0755)
 
-	stdout, _, _ := RunGitCli(dirName, "cat-file", "-p", hash)
+	stdout, stderr, errcode := RunGitCli(dirName, "cat-file", "-p", hash)
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
 
 	assert.Equal(t, string(initialFile), stdout)
+}
+
+func TestHashObject(t *testing.T) {
+	dirName := SetupTestDir()
+	defer CleanTestDir(dirName)
+
+	RunGitCli(dirName, "init")
+
+	fileName := dirName + "/" + "hellofile.txt"
+	fileContent := "Hello world !"
+	os.WriteFile(fileName, []byte(fileContent), 0755)
+	hasher := sha1.New()
+	hasher.Write([]byte(fileContent))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	stdout, stderr, errcode := RunGitCli(dirName, "hash-object", "-w", fileName)
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+
+	fileCreated := dirName + "/.git/objects/" + hash[:2] + "/" + hash[2:]
+	assert.Equal(t, hash, stdout)
+	assert.True(t, fileExists(fileCreated), fileCreated+" should exist")
 }

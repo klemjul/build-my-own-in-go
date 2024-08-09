@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -62,4 +65,41 @@ func (r *Repository) CatFile(hash string) (string, error) {
 		return "", fmt.Errorf("failed to copy file content to reader, %v", err)
 	}
 	return strings.Split(decompressedData.String(), "\x00")[1], err
+}
+
+func (r *Repository) HashFile(filename string) (string, error) {
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %v, %v", filename, err)
+	}
+	hasher := sha1.New()
+	_, err = hasher.Write(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to write to sha1 hasher, %v", err)
+	}
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	var compressedData bytes.Buffer
+	writer := zlib.NewWriter(&compressedData)
+	fileContent := "blob\x20" + strconv.Itoa(len(string(file))) + "\x00" + string(file)
+	_, err = writer.Write([]byte(fileContent))
+	if err != nil {
+		return "", fmt.Errorf("failed to write to zlib writer, %v", err)
+	}
+	err = writer.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close zlip writer, %v", err)
+	}
+	hashDir := r.ObjectsName() + "/" + hash[:2]
+	err = os.Mkdir(hashDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to create dir %v, %v", hashDir, err)
+	}
+	hashFile := hashDir + "/" + hash[2:]
+	err = os.WriteFile(hashFile, compressedData.Bytes(), 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file %v, %v", hashFile, err)
+	}
+
+	return hash, nil
 }

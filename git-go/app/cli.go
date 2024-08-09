@@ -42,6 +42,20 @@ func main() {
 			handleError(err)
 		}
 		os.Stdout.WriteString(file)
+	case "hash-object":
+		flagSet := flag.NewFlagSet(command, flag.ExitOnError)
+		var hashFileW string
+		flagSet.StringVar(&hashFileW, "w", "", "file path")
+		flagSet.Parse(os.Args[2:])
+		if hashFileW == "" {
+			handleError(errors.New("please provide -W flag with file path"))
+		}
+
+		hash, err := repo.HashFile(hashFileW)
+		if err != nil {
+			handleError(err)
+		}
+		os.Stdout.WriteString(hash)
 	default:
 		handleError(errors.New("Unknown command"))
 	}
