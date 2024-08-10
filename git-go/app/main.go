@@ -15,20 +15,22 @@ func handleError(err error) {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		handleError(errors.New("no command provided"))
+	}
 	command := os.Args[1]
 
 	wd, err := os.Getwd()
 	handleError(err)
 	repo := Repository{
-		RootName: wd + "/.git",
+		RootName: wd,
 	}
 
 	switch command {
 	case "init":
 		err = repo.Init()
-		if err != nil {
-			handleError(err)
-		}
+		handleError(err)
+		fmt.Printf("Initialized empty Git repository in %v\n", wd)
 	case "cat-file":
 		flagSet := flag.NewFlagSet(command, flag.ExitOnError)
 		var catFileP string
@@ -41,23 +43,24 @@ func main() {
 		if err != nil {
 			handleError(err)
 		}
-		os.Stdout.WriteString(file)
+		fmt.Printf("%v", file)
 	case "hash-object":
 		flagSet := flag.NewFlagSet(command, flag.ExitOnError)
 		var hashFileW string
 		flagSet.StringVar(&hashFileW, "w", "", "file path")
 		flagSet.Parse(os.Args[2:])
 		if hashFileW == "" {
-			handleError(errors.New("please provide -W flag with file path"))
+			handleError(errors.New("please provide -w flag with file path"))
 		}
-
-		hash, err := repo.HashFile(hashFileW)
-		if err != nil {
-			handleError(err)
-		}
-		os.Stdout.WriteString(hash)
+		_, hashHex, err := repo.WriteBlobObject(hashFileW)
+		handleError(err)
+		fmt.Printf("%v", hashHex)
+	case "write-tree":
+		_, hashHex, err := repo.WriteTreeObject(repo.RootName)
+		handleError(err)
+		fmt.Printf("%v", hashHex)
 	default:
-		handleError(errors.New("Unknown command"))
+		handleError(errors.New("unknown command"))
 	}
 
 	os.Exit(0)
