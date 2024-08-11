@@ -55,7 +55,7 @@ func RunCli(cliPath string, dirName string, args ...string) (string, string, int
 }
 
 func RunMyGitCli(dirName string, args ...string) (string, string, int) {
-	binDirAbs, _ := filepath.Abs("../../bin/git-go/app")
+	binDirAbs, _ := filepath.Abs("../../bin/gitgo")
 	return RunCli(binDirAbs, dirName, args...)
 }
 

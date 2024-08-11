@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/klemjul/build-my-own-in-go/git-go/internal"
 )
 
 func handleError(err error) {
@@ -23,7 +25,7 @@ func main() {
 
 	wd, err := os.Getwd()
 	handleError(err)
-	repo := Repository{
+	repo := internal.Repository{
 		RootName: wd,
 	}
 

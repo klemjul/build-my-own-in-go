@@ -11,7 +11,7 @@ http-server-test:
 	cd $(HTTP_SERVER_DIR)/app && ${GO} test  *.go
 
 git-go-build:
-	$(GO) build -o $(BUILD_DIR)/$(GIT_CLI_DIR)/app $(GIT_CLI_DIR)/app/*.go
+	$(GO) build -o $(BUILD_DIR)/gitgo $(GIT_CLI_DIR)/cmd/*.go
 
 git-go-test: git-go-build
 	cd $(GIT_CLI_DIR)/test && ${GO} test  *.go
