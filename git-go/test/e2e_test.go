@@ -155,11 +155,35 @@ func TestWriteTree(t *testing.T) {
 		fmt.Println(stderr)
 	}
 
-	lsTreeOut, stderr, errcode := RunGitCli(dirName, "ls-tree", "--name-only", treeHash)
+	lsTreeOut, stderr, errcode := RunGitCli(dirName, "ls-tree", "--name-only", strings.TrimSuffix(treeHash, "\n"))
 	if errcode != 0 {
 		fmt.Println(stderr)
 	}
 
 	assert.Equal(t, fmt.Sprintf("%v", "test_dir_1\ntest_file_1.txt\n"), lsTreeOut)
+}
 
+func TestLsTree(t *testing.T) {
+	dirName := SetupTestDir()
+	defer CleanTestDir(dirName)
+
+	RunGitCli(dirName, "init")
+
+	os.WriteFile(dirName+"/test_file_1.txt", []byte("hello world 1"), 0755)
+	os.Mkdir(dirName+"/test_dir_1", 0755)
+	os.WriteFile(dirName+"/test_dir_1/test_file_2.txt", []byte("hello world 2"), 0755)
+	os.WriteFile(dirName+"/test_dir_1/test_file_3.txt", []byte("hello world 3"), 0755)
+
+	RunGitCli(dirName, "add", ".")
+	treeHash, stderr, errcode := RunGitCli(dirName, "write-tree")
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+	fmt.Println(strings.TrimSuffix(treeHash, "\n"))
+	lsTreeOut, stderr, errcode := RunMyGitCli(dirName, "ls-tree", "--name-only", strings.TrimSuffix(treeHash, "\n"))
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+
+	assert.Equal(t, fmt.Sprintf("%v", "test_dir_1\ntest_file_1.txt\n"), lsTreeOut)
 }

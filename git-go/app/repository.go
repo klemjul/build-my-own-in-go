@@ -5,9 +5,11 @@ import (
 	"compress/zlib"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,46 +55,6 @@ func (r *Repository) Init() error {
 	return nil
 }
 
-func (r *Repository) CatFile(hash string) (string, error) {
-	filePath := r.ObjectsName() + "/" + hash[:2] + "/" + hash[2:]
-	file, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", fmt.Errorf("error reading file %v, %v", filePath, err)
-	}
-	reader, err := zlib.NewReader(bytes.NewReader(file))
-	if err != nil {
-		return "", fmt.Errorf("failed to create zlib reader, %v", err)
-	}
-	defer reader.Close()
-	var decompressedData bytes.Buffer
-	_, err = io.Copy(&decompressedData, reader)
-	if err != nil {
-		return "", fmt.Errorf("failed to copy file content to reader, %v", err)
-	}
-	return strings.Split(decompressedData.String(), "\x00")[1], err
-}
-
-func (r *Repository) WriteBlobObject(filename string) ([]byte, string, error) {
-	file, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read file %v, %v", filename, err)
-	}
-
-	fileContent := "blob\x20" + strconv.Itoa(len(file)) + "\x00" + string(file)
-
-	hasher := sha1.New()
-	_, err = hasher.Write([]byte(fileContent))
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to write to sha1 hasher, %v", err)
-	}
-	hash := hasher.Sum(nil)
-	hashHex := hex.EncodeToString(hash)
-
-	r.WriteObject(hashHex, []byte(fileContent))
-
-	return hash, hashHex, nil
-}
-
 func (r *Repository) WriteObject(hashHex string, content []byte) error {
 	var compressedData bytes.Buffer
 	writer := zlib.NewWriter(&compressedData)
@@ -115,6 +77,54 @@ func (r *Repository) WriteObject(hashHex string, content []byte) error {
 		return fmt.Errorf("failed to create file %v, %v", hashFile, err)
 	}
 	return nil
+}
+
+func (r *Repository) ReadObject(hashHex string) (string, error) {
+	filePath := filepath.Join(r.ObjectsName(), hashHex[:2], hashHex[2:])
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("error reading file %v, %v", filePath, err)
+	}
+	reader, err := zlib.NewReader(bytes.NewReader(file))
+	if err != nil {
+		return "", fmt.Errorf("failed to create zlib reader, %v", err)
+	}
+	defer reader.Close()
+	var decompressedData bytes.Buffer
+	_, err = io.Copy(&decompressedData, reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to copy file content to reader, %v", err)
+	}
+	return decompressedData.String(), nil
+}
+
+func (r *Repository) CatFile(hashHex string) (string, error) {
+	content, err := r.ReadObject(hashHex)
+	if err != nil {
+		return "", fmt.Errorf("failed to read object %v", err)
+	}
+	return strings.Split(content, "\x00")[1], nil
+}
+
+func (r *Repository) WriteBlobObject(filename string) ([]byte, string, error) {
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read file %v, %v", filename, err)
+	}
+
+	fileContent := "blob\x20" + strconv.Itoa(len(file)) + "\x00" + string(file)
+
+	hasher := sha1.New()
+	_, err = hasher.Write([]byte(fileContent))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to write to sha1 hasher, %v", err)
+	}
+	hash := hasher.Sum(nil)
+	hashHex := hex.EncodeToString(hash)
+
+	r.WriteObject(hashHex, []byte(fileContent))
+
+	return hash, hashHex, nil
 }
 
 func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
@@ -181,4 +191,24 @@ func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
 	}
 
 	return hash, hashHex, nil
+}
+
+func (r *Repository) ReadTreeObject(hashHex string, nameonly bool) ([]string, error) {
+	content, err := r.ReadObject(hashHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read object %v", err)
+	}
+	split := strings.Split(content, "\x00")
+	data := split[1 : len(split)-1]
+
+	if nameonly {
+		names := []string{}
+		for _, dByte := range data {
+			splitByte := strings.Split(dByte, " ")[1]
+			names = append(names, splitByte)
+		}
+		return names, nil
+	}
+	return nil, errors.New("read tree all not implemented")
+
 }
