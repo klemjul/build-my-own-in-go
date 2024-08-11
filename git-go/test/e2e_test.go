@@ -2,13 +2,10 @@ package test
 
 import (
 	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -64,17 +61,6 @@ func RunMyGitCli(dirName string, args ...string) (string, string, int) {
 
 func RunGitCli(dirName string, args ...string) (string, string, int) {
 	return RunCli("git", dirName, args...)
-}
-
-func gitFileHashPath(baseDir string, hash string) string {
-	return baseDir + "/.git/objects/" + hash[:2] + "/" + hash[2:]
-}
-
-func gitFileHash(content string) (string, string) {
-	contentWithHeaders := "blob\x20" + strconv.Itoa(len(content)) + "\x00" + content
-	hasher := sha1.New()
-	hasher.Write([]byte(contentWithHeaders))
-	return contentWithHeaders, hex.EncodeToString(hasher.Sum(nil))
 }
 
 func TestGitInit(t *testing.T) {
@@ -159,14 +145,10 @@ func TestWriteTree(t *testing.T) {
 
 	RunGitCli(dirName, "init")
 
-	file1C := "hello world 1"
-	file2C := "hello world 2"
-	file3C := "hello world 3"
-
-	os.WriteFile(dirName+"/test_file_1.txt", []byte(file1C), 0755)
+	os.WriteFile(dirName+"/test_file_1.txt", []byte("hello world 1"), 0755)
 	os.Mkdir(dirName+"/test_dir_1", 0755)
-	os.WriteFile(dirName+"/test_dir_1/test_file_2.txt", []byte(file2C), 0755)
-	os.WriteFile(dirName+"/test_dir_1/test_file_3.txt", []byte(file3C), 0755)
+	os.WriteFile(dirName+"/test_dir_1/test_file_2.txt", []byte("hello world 2"), 0755)
+	os.WriteFile(dirName+"/test_dir_1/test_file_3.txt", []byte("hello world 3"), 0755)
 
 	treeHash, stderr, errcode := RunMyGitCli(dirName, "write-tree")
 	if errcode != 0 {
@@ -178,6 +160,6 @@ func TestWriteTree(t *testing.T) {
 		fmt.Println(stderr)
 	}
 
-	assert.Equal(t, fmt.Sprintf("%v", file1C), lsTreeOut)
+	assert.Equal(t, fmt.Sprintf("%v", "test_dir_1\ntest_file_1.txt\n"), lsTreeOut)
 
 }

@@ -138,7 +138,7 @@ func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
 			if err != nil {
 				return nil, "", fmt.Errorf("failed to write tree object %v, %v", fullname, err)
 			}
-			entries = append(entries, entry{name: fullname, byteSha: hash, mode: "040000"})
+			entries = append(entries, entry{name: file.Name(), byteSha: hash, mode: "040000"})
 			continue
 		}
 		hash, _, err := r.WriteBlobObject(fullname)
@@ -146,7 +146,7 @@ func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
 			return nil, "", fmt.Errorf("failed to create blob object for %v, %v", fullname, err)
 		}
 		file.Type()
-		entries = append(entries, entry{name: fullname, byteSha: hash, mode: "100644"})
+		entries = append(entries, entry{name: file.Name(), byteSha: hash, mode: "100644"})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -156,7 +156,7 @@ func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
 	var treeContent []string
 	treeContentLength := 0
 	for _, entry := range entries {
-		treeEntry := fmt.Sprintf("%v\x20%v\x00%v", entry.mode, entry.name, entry.byteSha)
+		treeEntry := fmt.Sprintf("%v\x20%v\x00%v", entry.mode, entry.name, string(entry.byteSha))
 		treeContent = append(treeContent, treeEntry)
 		treeContentLength += len(treeEntry)
 	}
