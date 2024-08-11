@@ -175,15 +175,60 @@ func TestLsTree(t *testing.T) {
 	os.WriteFile(dirName+"/test_dir_1/test_file_3.txt", []byte("hello world 3"), 0755)
 
 	RunGitCli(dirName, "add", ".")
-	treeHash, stderr, errcode := RunGitCli(dirName, "write-tree")
-	if errcode != 0 {
-		fmt.Println(stderr)
-	}
-	fmt.Println(strings.TrimSuffix(treeHash, "\n"))
+	treeHash, _, _ := RunGitCli(dirName, "write-tree")
 	lsTreeOut, stderr, errcode := RunMyGitCli(dirName, "ls-tree", "--name-only", strings.TrimSuffix(treeHash, "\n"))
 	if errcode != 0 {
 		fmt.Println(stderr)
 	}
 
 	assert.Equal(t, fmt.Sprintf("%v", "test_dir_1\ntest_file_1.txt\n"), lsTreeOut)
+}
+
+func TestCommit(t *testing.T) {
+	dirName := SetupTestDir()
+	defer CleanTestDir(dirName)
+
+	RunGitCli(dirName, "init")
+
+	os.WriteFile(dirName+"/test_file_1.txt", []byte("hello world 1"), 0755)
+	os.Mkdir(dirName+"/test_dir_1", 0755)
+	os.WriteFile(dirName+"/test_dir_1/test_file_2.txt", []byte("hello world 2"), 0755)
+	os.WriteFile(dirName+"/test_dir_1/test_file_3.txt", []byte("hello world 3"), 0755)
+
+	RunGitCli(dirName, "add", ".")
+	treeHash, _, _ := RunGitCli(dirName, "write-tree")
+	commitHash, stderr, errcode := RunMyGitCli(dirName, "commit-tree", strings.TrimSuffix(treeHash, "\n"), "-m", "Initial commit")
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+
+	showRes, stderr, errcode := RunGitCli(dirName, "show", strings.TrimSuffix(commitHash, "\n"))
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+
+	assert.Contains(t, showRes, "+hello world 1")
+	assert.Contains(t, showRes, "+hello world 2")
+	assert.Contains(t, showRes, "Initial commit")
+	assert.Contains(t, showRes, commitHash)
+
+	os.Remove(dirName + "/test_file_1.txt")
+	os.WriteFile(dirName+"/test_file_1.txt", []byte("hello world 9"), 0755)
+
+	RunGitCli(dirName, "add", ".")
+	treeHash, _, _ = RunGitCli(dirName, "write-tree")
+
+	newCommitHash, stderr, errcode := RunMyGitCli(dirName, "commit-tree", strings.TrimSuffix(treeHash, "\n"), "-m", "Second commit", "-p", commitHash)
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+
+	showRes, stderr, errcode = RunGitCli(dirName, "show", strings.TrimSuffix(newCommitHash, "\n"))
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+
+	assert.Contains(t, showRes, "+hello world 9")
+	assert.Contains(t, showRes, "Second commit")
+	assert.Contains(t, showRes, newCommitHash)
 }

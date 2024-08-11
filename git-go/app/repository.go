@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Repository struct {
@@ -210,5 +211,30 @@ func (r *Repository) ReadTreeObject(hashHex string, nameonly bool) ([]string, er
 		return names, nil
 	}
 	return nil, errors.New("read tree all not implemented")
+}
 
+func (r *Repository) WriteCommitObject(treeSha string, parentSha string, message string) (string, error) {
+	currentTime := time.Now()
+	commitContent := fmt.Sprintf("tree %s\n", treeSha)
+	if parentSha != "" {
+		commitContent += fmt.Sprintf("parent %s\n", parentSha)
+	}
+	commitContent += fmt.Sprintf(
+		"author author_name <author_email> %d %s\n\n%s\n",
+		currentTime.Unix(),
+		"+0000",
+		message)
+	commitHeader := fmt.Sprintf("commit %v\x00", len(commitContent))
+	commitObject := commitHeader + commitContent
+
+	hasher := sha1.New()
+	_, err := hasher.Write([]byte(commitObject))
+	if err != nil {
+		return "", fmt.Errorf("failed to hash tree object %v", err)
+	}
+	hash := hasher.Sum(nil)
+	hashHex := hex.EncodeToString(hash)
+
+	r.WriteObject(hashHex, []byte(commitObject))
+	return hashHex, nil
 }

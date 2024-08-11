@@ -69,6 +69,17 @@ func main() {
 		handleError(err)
 
 		fmt.Printf("%v\n", strings.Join(treeNames, "\n"))
+	case "commit-tree":
+		committree := flag.NewFlagSet("commit-tree", flag.ExitOnError)
+		var p, m string
+		committree.StringVar(&p, "p", "", "previous commit hash")
+		committree.StringVar(&m, "m", "", "commit message")
+		committree.Parse(os.Args[3:])
+		treeHash := os.Args[2]
+		commitHash, err := repo.WriteCommitObject(treeHash, p, m)
+		handleError(err)
+
+		fmt.Printf("%v\n", commitHash)
 	default:
 		handleError(errors.New("unknown command"))
 	}
