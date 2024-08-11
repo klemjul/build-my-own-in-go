@@ -25,13 +25,13 @@ func main() {
 
 	wd, err := os.Getwd()
 	handleError(err)
-	repo := internal.Repository{
+	local := internal.LocalRepository{
 		RootName: wd,
 	}
 
 	switch command {
 	case "init":
-		err = repo.Init()
+		err = local.Init()
 		handleError(err)
 		fmt.Printf("Initialized empty Git repository in %v\n", wd)
 	case "cat-file":
@@ -42,7 +42,7 @@ func main() {
 		if p == "" {
 			handleError(errors.New("please provide -p flag with object hash"))
 		}
-		file, err := repo.CatFile(p)
+		file, err := local.CatFile(p)
 		if err != nil {
 			handleError(err)
 		}
@@ -55,11 +55,11 @@ func main() {
 		if w == "" {
 			handleError(errors.New("please provide -w flag with file path"))
 		}
-		_, hashHex, err := repo.WriteBlobObject(w)
+		_, hashHex, err := local.WriteBlobObject(w)
 		handleError(err)
 		fmt.Printf("%v\n", hashHex)
 	case "write-tree":
-		_, hashHex, err := repo.WriteTreeObject(repo.RootName)
+		_, hashHex, err := local.WriteTreeObject(local.RootName)
 		handleError(err)
 		fmt.Printf("%v\n", hashHex)
 	case "ls-tree":
@@ -67,7 +67,7 @@ func main() {
 		nameOnly := lstree.Bool("name-only", true, "get only the file name")
 		lstree.Parse(os.Args[2:])
 		hashHex := os.Args[len(os.Args)-1]
-		treeNames, err := repo.ReadTreeObject(hashHex, *nameOnly)
+		treeNames, err := local.ReadTreeObject(hashHex, *nameOnly)
 		handleError(err)
 
 		fmt.Printf("%v\n", strings.Join(treeNames, "\n"))
@@ -78,10 +78,18 @@ func main() {
 		committree.StringVar(&m, "m", "", "commit message")
 		committree.Parse(os.Args[3:])
 		treeHash := os.Args[2]
-		commitHash, err := repo.WriteCommitObject(treeHash, p, m)
+		commitHash, err := local.WriteCommitObject(treeHash, p, m)
 		handleError(err)
 
 		fmt.Printf("%v\n", commitHash)
+	case "test":
+		remote, err := internal.NewRemoteRepository("https://github.com/codecrafters-io/git-sample-1")
+		handleError(err)
+		res, err := remote.DiscoveringReferences()
+		handleError(err)
+
+		err = remote.UploadPack([]string{res[0].Ref})
+		handleError(err)
 	default:
 		handleError(errors.New("unknown command"))
 	}

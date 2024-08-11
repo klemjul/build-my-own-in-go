@@ -16,27 +16,27 @@ import (
 	"time"
 )
 
-type Repository struct {
+type LocalRepository struct {
 	RootName string
 }
 
-func (r *Repository) GitDir() string {
+func (r *LocalRepository) GitDir() string {
 	return r.RootName + "/.git"
 }
 
-func (r *Repository) ObjectsName() string {
+func (r *LocalRepository) ObjectsName() string {
 	return r.GitDir() + "/objects"
 }
 
-func (r *Repository) RefsName() string {
+func (r *LocalRepository) RefsName() string {
 	return r.GitDir() + "/refs"
 }
 
-func (r *Repository) HeadName() string {
+func (r *LocalRepository) HeadName() string {
 	return r.GitDir() + "/HEAD"
 }
 
-func (r *Repository) Init() error {
+func (r *LocalRepository) Init() error {
 	err := os.Mkdir(r.GitDir(), 0755)
 	if err != nil {
 		return fmt.Errorf("error creating directory %v, %v", r.GitDir(), err)
@@ -56,7 +56,7 @@ func (r *Repository) Init() error {
 	return nil
 }
 
-func (r *Repository) WriteObject(hashHex string, content []byte) error {
+func (r *LocalRepository) WriteObject(hashHex string, content []byte) error {
 	var compressedData bytes.Buffer
 	writer := zlib.NewWriter(&compressedData)
 	_, err := writer.Write(content)
@@ -80,7 +80,7 @@ func (r *Repository) WriteObject(hashHex string, content []byte) error {
 	return nil
 }
 
-func (r *Repository) ReadObject(hashHex string) (string, error) {
+func (r *LocalRepository) ReadObject(hashHex string) (string, error) {
 	filePath := filepath.Join(r.ObjectsName(), hashHex[:2], hashHex[2:])
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -99,7 +99,7 @@ func (r *Repository) ReadObject(hashHex string) (string, error) {
 	return decompressedData.String(), nil
 }
 
-func (r *Repository) CatFile(hashHex string) (string, error) {
+func (r *LocalRepository) CatFile(hashHex string) (string, error) {
 	content, err := r.ReadObject(hashHex)
 	if err != nil {
 		return "", fmt.Errorf("failed to read object %v", err)
@@ -107,7 +107,7 @@ func (r *Repository) CatFile(hashHex string) (string, error) {
 	return strings.Split(content, "\x00")[1], nil
 }
 
-func (r *Repository) WriteBlobObject(filename string) ([]byte, string, error) {
+func (r *LocalRepository) WriteBlobObject(filename string) ([]byte, string, error) {
 	file, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read file %v, %v", filename, err)
@@ -128,7 +128,7 @@ func (r *Repository) WriteBlobObject(filename string) ([]byte, string, error) {
 	return hash, hashHex, nil
 }
 
-func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
+func (r *LocalRepository) WriteTreeObject(dirname string) ([]byte, string, error) {
 	files, err := os.ReadDir(dirname)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read dir %v, %v", dirname, err)
@@ -194,7 +194,7 @@ func (r *Repository) WriteTreeObject(dirname string) ([]byte, string, error) {
 	return hash, hashHex, nil
 }
 
-func (r *Repository) ReadTreeObject(hashHex string, nameonly bool) ([]string, error) {
+func (r *LocalRepository) ReadTreeObject(hashHex string, nameonly bool) ([]string, error) {
 	content, err := r.ReadObject(hashHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read object %v", err)
@@ -213,7 +213,7 @@ func (r *Repository) ReadTreeObject(hashHex string, nameonly bool) ([]string, er
 	return nil, errors.New("read tree all not implemented")
 }
 
-func (r *Repository) WriteCommitObject(treeSha string, parentSha string, message string) (string, error) {
+func (r *LocalRepository) WriteCommitObject(treeSha string, parentSha string, message string) (string, error) {
 	currentTime := time.Now()
 	commitContent := fmt.Sprintf("tree %s\n", treeSha)
 	if parentSha != "" {
