@@ -3,7 +3,6 @@ package internal
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +23,7 @@ type RemoteRepository struct {
 }
 
 func NewRemoteRepository(BaseUrl string) (*RemoteRepository, error) {
+	// TODO: remove test proxy
 	proxyURL, err := url.Parse("http://localhost:8080")
 	if err != nil {
 		return nil, fmt.Errorf("error parsing proxy URL: %v", err)
@@ -132,23 +132,30 @@ func (r *RemoteRepository) UploadPack(wants []string) error {
 	}
 
 	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
+	packType := make([]byte, 8)
+	_, err = res.Body.Read(packType)
 	if err != nil {
 		return fmt.Errorf("failed to read body, %v", err)
 	}
 
-	packType := []byte{'0', '0', '0', '8', 'N', 'A', 'K', '\n'}
-	if !bytes.Equal(body[:8], packType) {
+	packTypeExpected := []byte{'0', '0', '0', '8', 'N', 'A', 'K', '\n'}
+	if !bytes.Equal(packType, packTypeExpected) {
 		return fmt.Errorf("failed to parse pack, invalid header %v", string(packType))
 	}
-	packFile := body[8:]
+	packFileBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		panic(err)
+	}
 
-	packMagicBytes := string(packFile[:4])
-	packVersion := binary.BigEndian.Uint32(packFile[4:8])
-	packNbObjects := binary.BigEndian.Uint32(packFile[8:12])
-	fmt.Println(packMagicBytes, packVersion, packNbObjects)
-
-	fmt.Println(packFile[12:13])
+	headers, contents, _, err := parsePackFile(packFileBytes)
+	if err != nil {
+		panic(err)
+	}
+	// TODO: fix length issue
+	for i := range 3 {
+		fmt.Println(headers[i])
+		fmt.Println(string(contents[i]))
+	}
 
 	return nil
 }
