@@ -80,6 +80,23 @@ func (r *LocalRepository) WriteObject(hashHex string, content []byte) error {
 	return nil
 }
 
+func (r *LocalRepository) WriteObjectWithType(objType string, content []byte) error {
+	blob := bytes.Buffer{}
+	blob.WriteString(fmt.Sprintf("%s %d", objType, len(content)))
+	blob.WriteByte(0)
+	blob.Write(content)
+	hash, err := CreateSha1Hex(blob.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to hash object, %v", err)
+	}
+	// Write to disk
+	err = r.WriteObject(hash, blob.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to write object, %v", err)
+	}
+	return nil
+}
+
 func (r *LocalRepository) ReadObject(hashHex string) (string, error) {
 	filePath := filepath.Join(r.ObjectsName(), hashHex[:2], hashHex[2:])
 	file, err := os.ReadFile(filePath)

@@ -4,20 +4,22 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 )
 
+// https://github.com/git/git/blob/795ea8776befc95ea2becd8020c7a284677b4161/Documentation/gitformat-pack.txt#L70
 type PackFileObjectType int
 
 const (
 	OBJ_COMMIT    PackFileObjectType = 1
-	OBJ_TREE                         = 2
-	OBJ_BLOB                         = 3
-	OBJ_TAG                          = 4
-	OBJ_OFS_DELTA                    = 6
-	OBJ_REF_DELTA                    = 7
+	OBJ_TREE      PackFileObjectType = 2
+	OBJ_BLOB      PackFileObjectType = 3
+	OBJ_TAG       PackFileObjectType = 4
+	OBJ_OFS_DELTA PackFileObjectType = 6
+	OBJ_REF_DELTA PackFileObjectType = 7
 )
 
 const (
@@ -33,76 +35,136 @@ type PackfileObjectHeader struct {
 	ContentSize int64
 }
 
-func parsePackFile(raw []byte) ([]PackfileObjectHeader, [][]byte, int, error) {
-	if len(raw) < 32 {
-		return nil, nil, 0, errors.New("invalid pack file header")
+// https://git-scm.com/docs/pack-format
+// https://stefan.saasen.me/articles/git-clone-in-haskell-from-the-bottom-up/#implementing-pack-file-negotiation
+// https://bitbucket.org/ssaasen/git/src/master/Documentation/technical/pack-format.txt
+func ParsePackFile(packFile []byte) ([]GitObject, []GitObjectDelta, error) {
+	packMagicBytes := string(packFile[:4])
+	packVersion := binary.BigEndian.Uint32(packFile[4:8])
+	packNbObjects := binary.BigEndian.Uint32(packFile[8:12])
+	if packMagicBytes != "PACK" {
+		return nil, nil, errors.New("invalid pack file header, not containing PACK on magic bytes")
 	}
-
-	packMagicBytes := string(raw[:4])
-	packVersion := binary.BigEndian.Uint32(raw[4:8])
-	packNbObjects := binary.BigEndian.Uint32(raw[8:12])
-	fmt.Printf("%v V%v, nb = %v ", packMagicBytes, packVersion, packNbObjects)
+	if packVersion != 2 {
+		return nil, nil, errors.New("invalid pack file header, version != 2")
+	}
 
 	bytesRead := int64(12)
-	packHeaders := make([]PackfileObjectHeader, 3)
-	packObjects := make([][]byte, 3)
-	// TODO: fix length issue
-	for i := range 3 {
-		headers, err := readPackFileObjectHeaders(raw[bytesRead:])
-		packHeaders[i] = *headers
+	objects := []GitObject{}
+	deltas := []GitObjectDelta{}
+
+	for i := 0; i < int(packNbObjects); i++ {
+		headers, err := readObjectHeaders(packFile[bytesRead:])
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse header on %v object, after %v byte read, %v", i, bytesRead, err)
+		}
+
 		bytesRead += int64(headers.HeaderSize)
-		if err != nil {
-			return nil, nil, 0, err
+
+		if headers.ObjectType == OBJ_COMMIT || headers.ObjectType == OBJ_TREE || headers.ObjectType == OBJ_BLOB || headers.ObjectType == OBJ_TAG {
+			read, object, err := readObjectContent(packFile[bytesRead:])
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to parse object content on %v object, after %v byte read, %v", i, bytesRead, err)
+			}
+
+			objName, err := parseGitObjectName(headers.ObjectType)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to parse git object name on %v object, after %v byte read, %v", i, bytesRead, err)
+			}
+
+			if headers.ContentSize != int64(len(object)) {
+				return nil, nil, fmt.Errorf("object of type %v has bad length, expected %v, has %v", headers.ObjectType, headers.ContentSize, len(object))
+			}
+
+			bytesRead += int64(read)
+			objects = append(objects, GitObject{ObjectName: objName, Content: object, ContentSize: headers.ContentSize})
+
+		} else if headers.ObjectType == OBJ_REF_DELTA {
+			// 20 first bytes are sha to apply delta
+			hash := packFile[bytesRead : bytesRead+20]
+			bytesRead += 20
+
+			read, object, err := readObjectContent(packFile[bytesRead:])
+			if err != nil {
+				return nil, nil, fmt.Errorf(fmt.Sprintf("failed to read delta, %v", err))
+			}
+			bytesRead += int64(read)
+
+			if headers.ContentSize != int64(len(object)) {
+				return nil, nil, fmt.Errorf("object of type %v has bad length, expected %v, has %v", headers.ObjectType, headers.ContentSize, len(object))
+			}
+			deltas = append(deltas, GitObjectDelta{ObjectSha: hex.EncodeToString(hash), Content: object, ContentSize: headers.ContentSize})
+
+		} else if headers.ObjectType == OBJ_OFS_DELTA {
+			return nil, nil, errors.New("OBJ_OFS_DELTA not implemented")
+		} else {
+			return nil, nil, fmt.Errorf("invalid object type %v on %v object, after %v byte read", headers.ObjectType, i, bytesRead)
 		}
-		read, content, err := readPackFileObject(raw[bytesRead:])
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		packObjects[i] = content
-		bytesRead += int64(read)
+
 	}
-	return packHeaders, packObjects, int(packNbObjects), nil
+	return objects, deltas, nil
 }
 
-func readPackFileObjectHeaders(packFile []byte) (*PackfileObjectHeader, error) {
-	bytesRead := 1
-
+func readObjectHeaders(packFile []byte) (*PackfileObjectHeader, error) {
 	contentType := int(packFile[0] & objTypeMask >> 4)
 	contentSize := int64(packFile[0] & initSizeMask)
-	sizeShift := uint(4)
 
-	if packFile[0]&msbMask == 0 {
-		return nil, errors.New("invalid packfile, first bit MSB it not 1")
-	}
-	for {
-		nextByte := packFile[bytesRead]
-		bytesRead += 1
-
-		contentSize += int64(nextByte&sizeMask) << sizeShift
-		sizeShift += 7
-		if nextByte&msbMask == 0 {
-			break
-		}
-	}
+	size, read := readVariableObjectSize(packFile, 4, contentSize)
+	// add first byte read
+	read += 1
 
 	return &PackfileObjectHeader{
 		ObjectType:  PackFileObjectType(contentType),
-		HeaderSize:  bytesRead,
-		ContentSize: contentSize,
+		HeaderSize:  read,
+		ContentSize: size,
 	}, nil
 }
 
-func readPackFileObject(packfile []byte) (int, []byte, error) {
+/*
+From each byte, the seven least significant bits are
+used to form the resulting integer. As long as the most significant
+bit is 1, this process continues; the byte with MSB 0 provides the
+last seven bits.  The seven-bit chunks are concatenated.
+*/
+func readVariableObjectSize(packFile []byte, initialShift int, initialSize int64) (int64, int) {
+	read := 0
+	size := initialSize
+	shift := initialShift
+	for packFile[read]&msbMask != 0 {
+		read++
+		size += int64(packFile[read]&sizeMask) << shift
+		shift += 7
+	}
+	return size, read
+}
+
+func readObjectContent(packfile []byte) (int, []byte, error) {
 	b := bytes.NewReader(packfile)
+
 	r, err := zlib.NewReader(b)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("readPackFileObject failed to init zlib reader, %v", err)
 	}
 	defer r.Close()
 	content, err := io.ReadAll(r)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, fmt.Errorf("readPackFileObject failed to read zlib stream, %v", err)
 	}
 	bytesRead := int(b.Size()) - b.Len()
 	return bytesRead, content, nil
+
+}
+
+func parseGitObjectName(objType PackFileObjectType) (string, error) {
+	var objectTypeMapping = map[PackFileObjectType]string{
+		OBJ_COMMIT: "commit",
+		OBJ_TREE:   "tree",
+		OBJ_BLOB:   "blob",
+		OBJ_TAG:    "tag",
+	}
+
+	if name, ok := objectTypeMapping[objType]; ok {
+		return name, nil
+	}
+	return "", errors.New("invalid PackFileObjectType code")
 }

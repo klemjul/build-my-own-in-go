@@ -2,12 +2,10 @@ package internal
 
 import (
 	"bytes"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 )
@@ -22,26 +20,24 @@ type RemoteRepository struct {
 	httpClient http.Client
 }
 
-func NewRemoteRepository(BaseUrl string) (*RemoteRepository, error) {
-	// TODO: remove test proxy
-	proxyURL, err := url.Parse("http://localhost:8080")
-	if err != nil {
-		return nil, fmt.Errorf("error parsing proxy URL: %v", err)
-	}
+type GitObject struct {
+	ObjectName  string
+	Content     []byte
+	ContentSize int64
+}
 
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(proxyURL),
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
+type GitObjectDelta struct {
+	ObjectSha   string
+	Content     []byte
+	ContentSize int64
+}
+
+func NewRemoteRepository(BaseUrl string) (RemoteRepository, error) {
+	return RemoteRepository{
+		httpClient: http.Client{
+			Transport: &http.Transport{},
 		},
-	}
-
-	client := http.Client{
-		Transport: transport,
-	}
-	return &RemoteRepository{
-		httpClient: client,
-		BaseUrl:    BaseUrl,
+		BaseUrl: BaseUrl,
 	}, nil
 }
 
@@ -106,15 +102,8 @@ func Map[T any](slice []T, fn func(T) T) []T {
 }
 
 // https://git-scm.com/docs/gitprotocol-http/en#_smart_service_git_upload_pack
-//
-// https://git-scm.com/docs/pack-protocol#_packfile_data
-//
-// https://git-scm.com/docs/pack-format
-//
-// https://bitbucket.org/ssaasen/git/src/master/Documentation/technical/pack-format.txt
-//
 // https://stefan.saasen.me/articles/git-clone-in-haskell-from-the-bottom-up/#implementing-ref-discovery
-func (r *RemoteRepository) UploadPack(wants []string) error {
+func (r *RemoteRepository) UploadPack(wants []string) ([]GitObject, []GitObjectDelta, error) {
 	reqBody := strings.Join(Map(wants, func(want string) string {
 		return fmt.Sprintf("0032want %v", want[4:])
 	}), "\n")
@@ -123,39 +112,34 @@ func (r *RemoteRepository) UploadPack(wants []string) error {
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	req.Header.Set("Accept", "application/x-git-upload-pack-result")
 	if err != nil {
-		return fmt.Errorf("error creating request: %v", err)
+		return nil, nil, fmt.Errorf("error creating request: %v", err)
 	}
 
 	res, err := r.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send req %v: %v", req.URL, err)
+		return nil, nil, fmt.Errorf("failed to send req %v: %v", req.URL, err)
 	}
 
 	defer res.Body.Close()
 	packType := make([]byte, 8)
 	_, err = res.Body.Read(packType)
 	if err != nil {
-		return fmt.Errorf("failed to read body, %v", err)
+		return nil, nil, fmt.Errorf("failed to read body, %v", err)
 	}
 
 	packTypeExpected := []byte{'0', '0', '0', '8', 'N', 'A', 'K', '\n'}
 	if !bytes.Equal(packType, packTypeExpected) {
-		return fmt.Errorf("failed to parse pack, invalid header %v", string(packType))
+		return nil, nil, fmt.Errorf("failed to parse pack, invalid header %v", string(packType))
 	}
 	packFileBytes, err := io.ReadAll(res.Body)
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("failed to read body, %v", err)
 	}
 
-	headers, contents, _, err := parsePackFile(packFileBytes)
+	objects, deltas, err := ParsePackFile(packFileBytes)
 	if err != nil {
-		panic(err)
-	}
-	// TODO: fix length issue
-	for i := range 3 {
-		fmt.Println(headers[i])
-		fmt.Println(string(contents[i]))
+		return nil, nil, fmt.Errorf("failed to ParsePackFile, %v", err)
 	}
 
-	return nil
+	return objects, deltas, nil
 }

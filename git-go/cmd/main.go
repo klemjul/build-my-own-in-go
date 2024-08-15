@@ -4,7 +4,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/klemjul/build-my-own-in-go/git-go/internal"
@@ -82,14 +84,46 @@ func main() {
 		handleError(err)
 
 		fmt.Printf("%v\n", commitHash)
-	case "test":
-		remote, err := internal.NewRemoteRepository("https://github.com/codecrafters-io/git-sample-1")
+	case "clone":
+		if len(os.Args) < 3 {
+			handleError(errors.New("no clone url provided"))
+		}
+		parsedUrl, err := url.Parse(os.Args[2])
+		if err != nil {
+			handleError(nil)
+		}
+
+		pathParts := strings.Split(parsedUrl.Path, "/")
+		projectName := pathParts[len(pathParts)-1]
+
+		remote, err := internal.NewRemoteRepository(parsedUrl.String())
 		handleError(err)
 		res, err := remote.DiscoveringReferences()
 		handleError(err)
 
-		err = remote.UploadPack([]string{res[0].Ref})
+		local = internal.LocalRepository{
+			RootName: filepath.Join(wd, projectName),
+		}
+
+		fmt.Printf("Cloning into '%s'...\n", projectName)
+		err = os.Mkdir(projectName, 0755)
+		if err != nil {
+			handleError(err)
+		}
+		local.Init()
+
+		objects, deltas, err := remote.UploadPack([]string{res[0].Ref})
 		handleError(err)
+
+		fmt.Printf("remote: Enumerating objects: %v, done.\n", len(objects))
+		for i := range objects {
+			fmt.Printf("Receiving objects: (%v,%v), done.\n", i, len(objects))
+			local.WriteObjectWithType(objects[i].ObjectName, objects[i].Content)
+		}
+		for i := range deltas {
+			// TODO: implement deltas
+			fmt.Println(deltas[i])
+		}
 	default:
 		handleError(errors.New("unknown command"))
 	}
