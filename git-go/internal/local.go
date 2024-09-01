@@ -70,7 +70,9 @@ func (r *LocalRepository) WriteObject(hashHex string, content []byte) error {
 	hashDir := r.ObjectsName() + "/" + hashHex[:2]
 	err = os.Mkdir(hashDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create dir %v, %v", hashDir, err)
+		if !os.IsExist(err) {
+			return fmt.Errorf("failed to create dir %v, %v", hashDir, err)
+		}
 	}
 	hashFile := hashDir + "/" + hashHex[2:]
 	err = os.WriteFile(hashFile, compressedData.Bytes(), 0755)
@@ -98,6 +100,9 @@ func (r *LocalRepository) WriteObjectWithType(objType string, content []byte) er
 }
 
 func (r *LocalRepository) ReadObject(hashHex string) (string, error) {
+	if !r.ObjectExists(hashHex) {
+		return "", fmt.Errorf("object does not exists %s", hashHex)
+	}
 	filePath := filepath.Join(r.ObjectsName(), hashHex[:2], hashHex[2:])
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -114,6 +119,17 @@ func (r *LocalRepository) ReadObject(hashHex string) (string, error) {
 		return "", fmt.Errorf("failed to copy file content to reader, %v", err)
 	}
 	return decompressedData.String(), nil
+}
+
+func (r *LocalRepository) ObjectExists(hashHex string) bool {
+	if len(hashHex) < 20 {
+		return false
+	}
+	filename := filepath.Join(r.ObjectsName(), hashHex[:2], hashHex[2:])
+	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return true
 }
 
 func (r *LocalRepository) CatFile(hashHex string) (string, error) {

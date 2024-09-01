@@ -117,12 +117,13 @@ func main() {
 
 		fmt.Printf("remote: Enumerating objects: %v, done.\n", len(objects))
 		for i := range objects {
-			fmt.Printf("Receiving objects: (%v,%v), done.\n", i, len(objects))
+			fmt.Printf("Receiving objects: (%v,%v), done.\n", i+1, len(objects))
 			local.WriteObjectWithType(objects[i].ObjectName, objects[i].Content)
 		}
 		for i := range deltas {
-			// TODO: implement deltas
-			fmt.Println(deltas[i])
+			fmt.Printf("Receiving deltas: (%v,%v), done.\n", i+1, len(deltas))
+			err := internal.ApplyObjectDelta(local, deltas[i])
+			handleError(err)
 		}
 	default:
 		handleError(errors.New("unknown command"))

@@ -138,6 +138,72 @@ func readVariableObjectSize(packFile []byte, initialShift int, initialSize int64
 	return size, read
 }
 
+func ApplyObjectDelta(r LocalRepository, delta GitObjectDelta) error {
+	if !r.ObjectExists(delta.ObjectSha) {
+		return fmt.Errorf("applyObjectDelta: object %s does not exists", delta.ObjectSha)
+	}
+
+	baseObjectStr, err := r.ReadObject(delta.ObjectSha)
+	idx := FindNull(baseObjectStr)
+	var (
+		objectType string
+		size       int
+	)
+	fmt.Sscanf(string(baseObjectStr[:idx]), "%s %d", &objectType, &size)
+	baseObject := []byte(baseObjectStr[idx+1:])
+	if err != nil {
+		return fmt.Errorf("applyObjectDelta: error reading %s, %s", delta.ObjectSha, err)
+	}
+
+	bytesRead := 0
+	expectedBaseSize, read := readVariableObjectSize(delta.Content[bytesRead:], 7, int64(delta.Content[bytesRead]&sizeMask))
+	bytesRead += read
+	bytesRead += 1
+
+	if len(baseObject) != int(expectedBaseSize) {
+		return fmt.Errorf("applyObjectDelta: bad delta header, wrong size expected %v, is %v", len(baseObject), int(expectedBaseSize))
+	}
+
+	expectedSize, read := readVariableObjectSize(delta.Content[bytesRead:], 7, int64(delta.Content[bytesRead]&sizeMask))
+	bytesRead += read
+	bytesRead += 1
+
+	buffer := bytes.Buffer{}
+	for bytesRead < len(delta.Content) {
+		opcode := delta.Content[bytesRead]
+		bytesRead++
+		if opcode&0x80 != 0 {
+			var argument uint64
+			for bit := 0; bit < 7; bit++ {
+				if opcode&(1<<bit) != 0 {
+					argument += uint64(delta.Content[bytesRead]) << (bit * 8)
+					bytesRead++
+				}
+			}
+			offset := argument & 0xFFFFFFFF
+			size := (argument >> 32) & 0xFFFFFF
+			if size == 0 {
+				size = 0x10000
+			}
+			buffer.Write(baseObject[offset : offset+size])
+		} else {
+			size := int(opcode & 0x7F)
+			buffer.Write(delta.Content[bytesRead : bytesRead+size])
+			bytesRead += size
+		}
+	}
+	undeltifiedObject := buffer.Bytes()
+	if int(expectedSize) != len(undeltifiedObject) {
+		return fmt.Errorf("applyObjectDelta: bad delta header, wrong size expected %v, is %v", int(expectedSize), len(undeltifiedObject))
+	}
+	err = r.WriteObjectWithType(objectType, undeltifiedObject)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
 func readObjectContent(packfile []byte) (int, []byte, error) {
 	b := bytes.NewReader(packfile)
 

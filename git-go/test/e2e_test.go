@@ -232,3 +232,22 @@ func TestCommit(t *testing.T) {
 	assert.Contains(t, showRes, "Second commit")
 	assert.Contains(t, showRes, newCommitHash)
 }
+
+func TestClone(t *testing.T) {
+	dirName := SetupTestDir()
+	defer CleanTestDir(dirName)
+
+	stdout, stderr, errcode := RunMyGitCli(dirName, "clone", "https://github.com/codecrafters-io/git-sample-1")
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+	assert.Contains(t, stdout, "Receiving objects: (329,329), done.")
+	assert.Contains(t, stdout, "Receiving deltas: (3,3), done.")
+
+	stdout, stderr, errcode = RunGitCli(fmt.Sprintf("%s/git-sample-1", dirName), "cat-file", "-p", "47b37f1a82bfe85f6d8df52b6258b75e4343b7fd")
+	if errcode != 0 {
+		fmt.Println(stderr)
+	}
+	assert.Contains(t, stdout, "Get back to version 1")
+
+}

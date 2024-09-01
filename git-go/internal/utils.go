@@ -16,3 +16,12 @@ func CreateSha1Hex(content []byte) (string, error) {
 	hashHex := hex.EncodeToString(hash)
 	return hashHex, nil
 }
+
+func FindNull(s string) int {
+	for i, char := range s {
+		if char == '\x00' {
+			return i
+		}
+	}
+	return -1
+}
